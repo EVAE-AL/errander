@@ -176,6 +176,8 @@ class LLMClient:
             raise LLMError(f"HTTP {exc.code}: {body[:300]}") from exc
         except urllib.error.URLError as exc:
             raise LLMError(f"connection failed: {exc.reason}") from exc
+        except OSError as exc:  # raw socket timeouts are not wrapped in URLError
+            raise LLMError(f"connection failed: {exc}") from exc
 
         tool_calls = []
         for slot in calls.values():
@@ -222,6 +224,8 @@ class LLMClient:
             raise LLMError(f"HTTP {exc.code}: {body[:300]}") from exc
         except urllib.error.URLError as exc:
             raise LLMError(f"connection failed: {exc.reason}") from exc
+        except OSError as exc:
+            raise LLMError(f"connection failed: {exc}") from exc
 
     def _track_usage(self, usage: dict[str, Any] | None) -> None:
         if not usage:

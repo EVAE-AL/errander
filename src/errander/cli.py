@@ -69,10 +69,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--max-steps", type=int, default=25, help="safety cap on agent steps")
     parser.add_argument(
-        "-y", "--yes", action="store_true", help="run shell commands without confirmation"
+        "-y", "--yes", action="store_true", help="skip confirmations (safety policy still applies)"
     )
     parser.add_argument(
         "--no-stream", action="store_true", help="buffer responses instead of streaming"
+    )
+    parser.add_argument(
+        "--allow-secrets",
+        action="store_true",
+        help="let the agent read and write files that look like secrets (e.g. .env)",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     return parser
@@ -104,6 +109,30 @@ def make_confirm(palette: Palette):
             )
             return False
         print(f"{palette.yellow}? run:{palette.reset} {command}")
+        try:
+            answer = input(f"{palette.yellow}  [y/N]{palette.reset} ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return False
+        return answer in {"y", "yes"}
+
+    return confirm
+
+
+def make_overwrite_confirm(palette: Palette):
+    def confirm(path: str, content: str) -> bool:
+        if not sys.stdin.isatty():
+            print(
+                f"{palette.yellow}! declining overwrite of '{path}' — no interactive terminal; "
+                f"use --yes to auto-approve{palette.reset}"
+            )
+            return False
+        lines = content.splitlines()
+        preview = "\n".join(f"  | {line[:96]}" for line in lines[:10])
+        if len(lines) > 10:
+            preview += f"\n  | ... ({len(lines) - 10} more lines)"
+        print(f"{palette.yellow}? overwrite '{path}' with:{palette.reset}")
+        print(preview or "  | (empty file)")
         try:
             answer = input(f"{palette.yellow}  [y/N]{palette.reset} ").strip().lower()
         except (EOFError, KeyboardInterrupt):
@@ -180,7 +209,12 @@ def main(argv: list[str] | None = None) -> int:
 
     workdir = args.workdir.resolve()
     client = LLMClient(args.base_url, args.api_key, args.model)
-    toolbox = ToolBox(workdir, confirm_run=None if args.yes else make_confirm(palette))
+    toolbox = ToolBox(
+        workdir,
+        confirm_run=None if args.yes else make_confirm(palette),
+        confirm_write=None if args.yes else make_overwrite_confirm(palette),
+        allow_secrets=args.allow_secrets,
+    )
     agent = Agent(
         client,
         toolbox,

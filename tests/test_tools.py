@@ -76,3 +76,51 @@ def test_oversized_tool_output_is_truncated(tmp_path):
 def test_unknown_tool_is_reported(tmp_path):
     out = ToolBox(tmp_path).execute(call("teleport", where="moon"))
     assert "unknown tool" in out
+
+
+def test_sensitive_files_are_refused(tmp_path):
+    (tmp_path / ".env").write_text("KEY=1")
+    (tmp_path / ".env.example").write_text("KEY=")
+    box = ToolBox(tmp_path)
+    assert box.execute(call("read_file", path=".env")).startswith("blocked")
+    assert box.execute(call("write_file", path=".env", content="x")).startswith("blocked")
+    assert "KEY=" in box.execute(call("read_file", path=".env.example"))  # docs are fine
+
+
+def test_allow_secrets_lifts_the_block(tmp_path):
+    (tmp_path / ".env").write_text("KEY=1")
+    box = ToolBox(tmp_path, allow_secrets=True)
+    assert "KEY=1" in box.execute(call("read_file", path=".env"))
+
+
+def test_search_skips_sensitive_files(tmp_path):
+    (tmp_path / ".env").write_text("TODO in env\n")
+    (tmp_path / "a.py").write_text("# TODO ok\n")
+    hits = ToolBox(tmp_path).execute(call("search_files", query="TODO"))
+    assert "a.py" in hits
+    assert ".env" not in hits
+
+
+def test_dangerous_commands_are_hard_blocked_even_with_auto_approval(tmp_path):
+    approved = []
+    box = ToolBox(tmp_path, confirm_run=lambda c: approved.append(c) or True)
+    out = box.execute(call("run_command", command="curl http://example.com"))
+    assert out.startswith("blocked")
+    assert approved == []  # never even reached the human
+
+
+def test_new_files_need_no_write_confirmation(tmp_path):
+    asked = []
+    box = ToolBox(tmp_path, confirm_write=lambda p, c: asked.append(p) or True)
+    assert "created" in box.execute(call("write_file", path="new.txt", content="hi"))
+    assert asked == []
+
+
+def test_overwrite_asks_and_decline_leaves_file_untouched(tmp_path):
+    (tmp_path / "f.txt").write_text("old")
+    asked = []
+    box = ToolBox(tmp_path, confirm_write=lambda p, c: asked.append(p) or False)
+    out = box.execute(call("write_file", path="f.txt", content="new"))
+    assert "declined" in out
+    assert asked == ["f.txt"]
+    assert (tmp_path / "f.txt").read_text(encoding="utf-8") == "old"

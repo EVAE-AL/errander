@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import contextlib
+import fnmatch
 import os
+import re
 import subprocess
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
@@ -22,6 +24,46 @@ SKIP_DIRS = {
     "node_modules", "__pycache__", ".pytest_cache", ".ruff_cache", "dist", "build",
 }
 
+# Files whose contents are secrets: refused for read and write, skipped by
+# search. .env.example is deliberately not matched — it is documentation.
+SENSITIVE_FILE_PATTERNS = (
+    ".env", ".env.local", ".env.production", ".env.development",
+    "*.pem", "*.key", "*.pfx", "*.p12", "*.ppk", "*.kdbx", "*.keystore", "*.jks",
+    "id_rsa*", "id_ed25519*", "id_ecdsa*",
+    "credentials*.json", "secrets*",
+)
+
+# Commands hard-blocked BEFORE the confirmation prompt: signatures of data
+# exfiltration and destructive one-liners. This list is a speed bump, not a
+# wall — the human confirmation and the workspace sandbox remain the real gates.
+BLOCKED_COMMANDS = (
+    (r"\bcurl\b", "network download (curl)"),
+    (r"\bwget\b", "network download (wget)"),
+    (r"\binvoke-webrequest\b|\biwr\b", "network download (PowerShell)"),
+    (r"\binvoke-expression\b|\biex\b", "execute-string (PowerShell)"),
+    (r"\bbitsadmin\b", "background download (bitsadmin)"),
+    (r"\bcertutil\b.*\b-urlcache\b", "download via certutil"),
+    (r"\brm\s+(-[a-z]*r[a-z]*f[a-z]*|-rf\b)", "recursive force delete (rm -rf)"),
+    (r"\b(rmdir|rd)\s+/s\b", "recursive delete (cmd)"),
+    (r"\bdel\s+/[qs]", "recursive/quiet delete (cmd)"),
+    (r"\bremove-item\b.*\b-recurse\b", "recursive delete (PowerShell)"),
+    (r"\bformat\s+[a-z]:", "disk format"),
+    (r"\bmkfs\b", "disk format (mkfs)"),
+    (r"\bdiskpart\b", "disk partitioning"),
+    (r"\breg\s+(add|delete|import)\b", "registry modification"),
+    (r"\bshutdown\b", "system shutdown"),
+    (r"\|\s*(sh|bash|zsh|powershell|pwsh|python|perl)\b", "piping into a shell or interpreter"),
+)
+
+BLOCKED_COMMAND_RULES = [
+    (re.compile(pattern, re.IGNORECASE), label) for pattern, label in BLOCKED_COMMANDS
+]
+
+
+def _is_sensitive(path: Path) -> bool:
+    name = path.name.lower()
+    return any(fnmatch.fnmatch(name, pattern) for pattern in SENSITIVE_FILE_PATTERNS)
+
 
 @dataclass
 class Tool:
@@ -37,13 +79,23 @@ class ToolBox:
     """Registry and implementations for the agent's tools.
 
     File tools are sandboxed: every path is resolved against `workdir` and
-    anything escaping it is rejected. `confirm_run`, when given, gates shell
-    commands behind an explicit user approval.
+    anything escaping it is rejected. Sensitive-looking files (.env, keys,
+    …) are refused for read and write unless `allow_secrets` is set.
+    `confirm_run` gates shell commands and `confirm_write` gates overwrites
+    of existing files behind explicit user approval.
     """
 
-    def __init__(self, workdir: Path, confirm_run: Callable[[str], bool] | None = None):
+    def __init__(
+        self,
+        workdir: Path,
+        confirm_run: Callable[[str], bool] | None = None,
+        confirm_write: Callable[[str, str], bool] | None = None,
+        allow_secrets: bool = False,
+    ):
         self.workdir = workdir.resolve()
         self.confirm_run = confirm_run
+        self.confirm_write = confirm_write
+        self.allow_secrets = allow_secrets
         self.tools = [
             Tool(
                 name="list_dir",
@@ -203,6 +255,8 @@ class ToolBox:
 
     def _read_file(self, path: str, start: int = 1, end: int = MAX_READ_LINES) -> str:
         target = self._resolve(path)
+        if not self.allow_secrets and _is_sensitive(target):
+            return f"blocked: '{path}' looks like a secrets file; reading it is refused"
         if not target.is_file():
             return f"not a file: {path}"
         lines = target.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -218,10 +272,14 @@ class ToolBox:
 
     def _write_file(self, path: str, content: str) -> str:
         target = self._resolve(path)
-        action = "overwrote" if target.exists() else "created"
+        if not self.allow_secrets and _is_sensitive(target):
+            return f"blocked: '{path}' looks like a secrets file; writing it is refused"
+        overwriting = target.exists()
+        if overwriting and self.confirm_write and not self.confirm_write(path, content):
+            return f"the user declined to overwrite '{path}'; do not retry without asking"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content, encoding="utf-8")
-        return f"{action} {path} ({len(content)} chars)"
+        return f"{'overwrote' if overwriting else 'created'} {path} ({len(content)} chars)"
 
     def _search_files(self, query: str, path: str = ".", ignore_case: bool = False) -> str:
         root = self._resolve(path)
@@ -243,6 +301,8 @@ class ToolBox:
                 hits.append(f"... (stopped at {MAX_SEARCH_HITS} matches)")
                 break
             try:
+                if not self.allow_secrets and _is_sensitive(full):
+                    continue
                 if full.stat().st_size > MAX_FILE_BYTES:
                     continue
                 text = full.read_text(encoding="utf-8", errors="replace")
@@ -262,6 +322,12 @@ class ToolBox:
         return "\n".join(hits)
 
     def _run_command(self, command: str) -> str:
+        for pattern, label in BLOCKED_COMMAND_RULES:
+            if pattern.search(command):
+                return (
+                    f"blocked: '{command}' matches the safety policy ({label}); "
+                    "do not retry it or try to work around it"
+                )
         if self.confirm_run and not self.confirm_run(command):
             return "the user declined this command; do not retry it without asking them first"
         try:
