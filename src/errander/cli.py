@@ -174,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.model:
         print(
             f"{palette.red}error:{palette.reset} no model — set ERRANDER_MODEL or pass --model "
-            "(e.g. deepseek-chat, glm-4-flash)"
+            "(e.g. deepseek-chat, glm-4.5-flash)"
         )
         return 2
 

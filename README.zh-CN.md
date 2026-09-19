@@ -60,7 +60,7 @@ errander "看看这个仓库是干什么的，写一份 5 条要点的总结到 
 | 提供商 | `ERRANDER_BASE_URL` | `ERRANDER_MODEL` |
 |---|---|---|
 | DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
-| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash`（免费） |
+| 智谱 GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4.5-flash`（免费，工具调用可靠） |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
 | Ollama（本地） | `http://localhost:11434/v1` | `qwen2.5:7b` |
 

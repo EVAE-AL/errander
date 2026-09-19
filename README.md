@@ -60,7 +60,7 @@ Any OpenAI-compatible provider works — set these in `.env` (see `.env.example`
 | Provider | `ERRANDER_BASE_URL` | `ERRANDER_MODEL` |
 |---|---|---|
 | DeepSeek | `https://api.deepseek.com` | `deepseek-chat` |
-| Zhipu GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4-flash` (free) |
+| Zhipu GLM | `https://open.bigmodel.cn/api/paas/v4` | `glm-4.5-flash` (free, good at tool use) |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini` |
 | Ollama (local) | `http://localhost:11434/v1` | `qwen2.5:7b` |
 
