@@ -19,21 +19,28 @@ errander takes a task in plain language and works on your codebase with five too
 ## Example session
 
 ```text
-$ errander "collect all TODO comments in this repo into TODOS.md"
+$ errander "Write DOCS.md: one sentence per Python file in src/errander describing what it does, plus the main classes or functions defined in each."
 
-errander v0.1.0 · model deepseek-chat · workspace ~/demo
+errander v0.1.0 · model glm-4.5-flash · workspace D:\ZCODE\作品集\errander
 
-── step 1 ──────────────────────────────────────
-● search_files {"ignore_case": true, "path": ".", "query": "TODO"}
-  app/api.py:17:  # TODO: rate-limit this endpoint
-  app/tasks.py:42:  # TODO: retries are not exponential yet
-── step 2 ──────────────────────────────────────
-● write_file TODOS.md  (128 chars)
-  created TODOS.md (128 chars)
-── step 3 ──────────────────────────────────────
-Found 2 TODO comments and wrote them to TODOS.md with file and line references.
+── step 1 ─────────────────────────────
+● list_dir {"path": "src/errander"}
+dir   __pycache__  |  file  __init__.py        344 B  (+5 lines)
 
-3 steps · 2 tool calls · 9.8s · 1,842 tokens
+── step 2 ─────────────────────────────
+● read_file {"path": "src/errander/__init__.py"}
+1 | """errander — a tiny terminal coding agent with zero dependencies."""  |  2 |  (+15 lines)
+
+  ... steps 3-11: paged reads of __main__.py, agent.py, cli.py, llm.py and tools.py
+
+── step 12 ─────────────────────────────
+● write_file DOCS.md  (2162 chars)
+created DOCS.md (2162 chars)
+
+── step 13 ─────────────────────────────
+I've created the DOCS.md file with one sentence per Python file in the src/errander directory, describing what each file does and listing the main classes or functions defined in each.
+
+13 steps · 12 tool calls · 43.8s · 86,869 tokens
 ```
 
 ## Why this exists

@@ -19,21 +19,38 @@ errander 接收一句自然语言任务，然后用 5 个工具（**列目录、
 ## 演示
 
 ```text
-$ errander "把这个仓库里的 TODO 注释收集到 TODOS.md"
+$ errander "写一份 DOCS.md：用一句话说明 src/errander 下每个 Python 文件的作用，并列出每个文件里定义的主要类或函数。"
 
-errander v0.1.0 · model deepseek-chat · workspace ~/demo
+errander v0.1.0 · model glm-4.5-flash · workspace D:\ZCODE\作品集\errander
 
-── step 1 ──────────────────────────────────────
-● search_files {"ignore_case": true, "path": ".", "query": "TODO"}
-  app/api.py:17:  # TODO: rate-limit this endpoint
-  app/tasks.py:42:  # TODO: retries are not exponential yet
-── step 2 ──────────────────────────────────────
-● write_file TODOS.md  (128 chars)
-  created TODOS.md (128 chars)
-── step 3 ──────────────────────────────────────
-Found 2 TODO comments and wrote them to TODOS.md with file and line references.
+── step 1 ─────────────────────────────
+我来帮您创建 DOCS.md 文件。首先让我查看 src/errander 目录下的文件结构。
 
-3 steps · 2 tool calls · 9.8s · 1,842 tokens
+● list_dir {"path": "src/errander"}
+dir   __pycache__  |  file  __init__.py        344 B  (+5 lines)
+
+── step 2 ─────────────────────────────
+● read_file {"path": "src/errander/__init__.py"}
+1 | """errander — a tiny terminal coding agent with zero dependencies."""  |  2 |  (+15 lines)
+● read_file {"path": "src/errander/__main__.py"}
+1 | """Enable `python -m errander`."""  |  2 |  (+5 lines)
+● read_file {"path": "src/errander/agent.py"}
+1 | """The agent loop: model -> tool calls -> results -> model, until the task is done."""  |  2 |  (+90 lines)
+● read_file {"path": "src/errander/cli.py"}
+1 | """Command-line entry point: env loading, argument parsing, rendering, confirmation."""  |  2 |  (+184 lines)
+● read_file {"path": "src/errander/llm.py"}
+1 | """Minimal chat client for any OpenAI-compatible /chat/completions endpoint.  |  2 |  (+178 lines)
+● read_file {"path": "src/errander/tools.py"}
+1 | """The agent's hands: five tools, one registry, and a workspace sandbox."""  |  2 |  (+172 lines)
+
+── step 3 ─────────────────────────────
+● write_file DOCS.md  (1656 chars)
+created DOCS.md (1656 chars)
+
+── step 4 ─────────────────────────────
+已创建 DOCS.md 文件，详细说明了 src/errander 目录下每个 Python 文件的作用，并列出了每个文件中定义的主要类和函数。
+
+4 steps · 8 tool calls · 95.2s · 22,040 tokens
 ```
 
 ## 为什么做这个
